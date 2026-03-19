@@ -132,18 +132,3 @@ SIMD/
 
 ---
 
-## Future Improvements
-
-Possible future extensions to the project include:
-
-- increasing SIMD lane count
-- experimenting with different quantization formats
-- adding additional vector instructions
-- integrating a simple memory interface
-- synthesizing the design for FPGA evaluation
-
----
-
-## Author
-
-Personal SystemVerilog RTL project focused on exploring SIMD architecture and hardware acceleration concepts.
