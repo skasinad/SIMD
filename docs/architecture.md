@@ -164,3 +164,109 @@ The instruction format is therefore:
 [opcode(3 bits) | vdst(4 bits) | vsrc1(4 bits) | vsrc2(4 bits) | reserved(1 bit)]
 
 The final 1 bit is reserved due to the sake of rounding from 15 bits to 16 bits.
+
+
+## Register File
+
+The SIMD register file is designed with **4 total ports**:
+
+- **3 read ports**
+- **1 write port**
+
+The reason for this comes directly from looking at the instruction behavior and identifying the **worst-case register access pattern**.
+
+The most demanding instruction in this architecture is **VMAC**.
+
+For VMAC, in a single cycle, the hardware needs to:
+
+1. read `vsrc1`
+2. read `vsrc2`
+3. read the current value already stored in `vdst`
+4. write the updated result back into `vdst`
+
+So in total, VMAC needs:
+
+- **3 reads**
+- **1 write**
+
+Because of that, the register file must support at least **3 simultaneous read accesses** and **1 write access** in order to execute the instruction cleanly in a single cycle.
+
+Even though not every instruction needs all 3 read ports, the register file is designed around the **worst-case instruction requirement**, since that determines the minimum number of ports needed for correct operation.
+
+### Read Ports
+
+The register file uses **3 synchronous read ports**.
+
+These read ports are used for:
+
+- `vsrc1`
+- `vsrc2`
+- current `vdst` value when needed, such as in VMAC
+
+Using 3 read ports allows the architecture to fetch all required source operands in the same cycle for the most demanding operations.
+
+### Write Port
+
+The register file has **1 write port**.
+
+This write port is used to write the final result back into the destination register.
+
+Since every instruction produces at most one destination register update at a time, **1 write port is sufficient** for this microarchitecture.
+
+## Datapath
+
+The datapath begins with the **operand fetch path**.
+
+As already defined in this architecture, each register in the register file is **64 bits wide**. That means when a source register is read, the register file outputs **one full 64-bit vector value**.
+
+However, the SIMD slices do not operate on the full 64-bit value as one single piece. Each slice only works on **one INT8 element**, which means the operand fetch path has to prepare that register output before it can be used by the slices.
+
+### Operand Fetch Path
+
+The job of the operand fetch path is to take the **64-bit value coming out of the register file** and split it into **8 separate 8-bit elements**.
+
+So instead of treating the register output as one large block, the datapath breaks it into:
+
+- element 0 → 8 bits  
+- element 1 → 8 bits  
+- element 2 → 8 bits  
+- element 3 → 8 bits  
+- element 4 → 8 bits  
+- element 5 → 8 bits  
+- element 6 → 8 bits  
+- element 7 → 8 bits  
+
+This step is necessary because the SIMD architecture is built around **8 slices**, and each slice is responsible for processing exactly **one 8-bit element**.
+
+### Slice Assignment
+
+After the 64-bit operand is broken into 8 separate 8-bit values, the operand fetch path then routes those values to the slices.
+
+Each slice receives its own corresponding element.
+
+So the mapping is straightforward:
+
+- **slice 0** gets element 0  
+- **slice 1** gets element 1  
+- **slice 2** gets element 2  
+- **slice 3** gets element 3  
+- **slice 4** gets element 4  
+- **slice 5** gets element 5  
+- **slice 6** gets element 6  
+- **slice 7** gets element 7  
+
+This way, all 8 slices receive their input data in parallel.
+
+### Why This Matters
+
+This part of the datapath is what allows the SIMD unit to actually behave like a vector engine.
+
+The register file stores the vector as **one 64-bit register**, but the compute hardware works on that vector as **8 parallel INT8 elements**.
+
+So the operand fetch path acts as the bridge between:
+
+- the **register-level view** of the data  
+and  
+- the **slice-level view** of the data
+
+Without this step, the slices would not be able to operate independently on the elements of the vector.
