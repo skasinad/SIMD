@@ -79,7 +79,7 @@ vdst[i] = vsrc1[i] + vsrc2[i]... for all slices that i = 0 through 7.
 The structure is similar to VADD, except that multiplication is performed instead of addition.
 vdst[i] = vsrc1[i] * vsrc2[i].
 
-This instruction is also where **sparsity-aware execution** becomes useful.
+This instruction is also where **sparsity-aware execution** starts to becomes useful.
 
 If either operand element is **zero**, that slice does not need to perform the multiplication. In those cases, the slice can be skipped entirely, which avoids unnecessary compute work.
 
@@ -95,6 +95,7 @@ vdst[i] = vdst[i] + (vsrc1[i] * vsrc2[i])
 
 This instruction is typically used inside loops to build up dot products or accumulation-based computations across multiple vectors.
 
+Sparsity behavior applies to VMAC.
 ---
 
 ### 4. VDOT
@@ -109,6 +110,8 @@ Unlike the other instructions, which produce a vector output, VDOT produces **on
 
 Conceptually:
 result = sum(vsrc1[i] * vsrc2[i])
+
+Sparsity behavior will also apply to VDOT.
 
 ---
 
@@ -128,7 +131,7 @@ This instruction only requires `vsrc1`.
 
 ### 6. VLOAD
 
-**VLOAD** loads data from memory into a vector register.
+**VLOAD** loads data from memory into a vector register. This will not go into any of the ALUs.
 
 The instruction reads **8 consecutive INT8 values** from memory starting at a base address, and places them into the slices of a vector register.
 
@@ -140,7 +143,7 @@ This allows the entire vector register to be filled in a single instruction.
 
 ### 7. VSTORE
 
-**VSTORE** writes vector register contents back to memory.
+**VSTORE** writes vector register contents back to memory. This also will not go into any of the ALUs as it is a memory instruction.
 
 The instruction stores the **8 elements of a vector register** into **8 consecutive memory locations**.
 
@@ -165,6 +168,18 @@ The instruction format is therefore:
 
 The final 1 bit is reserved due to the sake of rounding from 15 bits to 16 bits.
 
+## Opcode Table
+
+| Instruction | Opcode |
+|-------------|--------|
+| VADD        | 000    |
+| VMUL        | 001    |
+| VMAC        | 010    |
+| VDOT        | 011    |
+| VRELU       | 100    |
+| VLOAD       | 101    |
+| VSTORE      | 110    |
+| RESERVED    | 111    |
 
 ## Register File
 
@@ -257,16 +272,112 @@ So the mapping is straightforward:
 
 This way, all 8 slices receive their input data in parallel.
 
-### Why This Matters
+### Slice ALU and Execution Pipeline
 
-This part of the datapath is what allows the SIMD unit to actually behave like a vector engine.
+Each of the **8 SIMD slices contains its own ALU**. This follows the basic idea of SIMD execution, where the same instruction is applied across multiple slices of data in parallel. Every slice receives the same decoded instruction, but operates on its own **8-bit element** from the vector operands.
 
-The register file stores the vector as **one 64-bit register**, but the compute hardware works on that vector as **8 parallel INT8 elements**.
+So while the instruction is shared across the whole SIMD unit, the computation itself happens independently inside each slice.
 
-So the operand fetch path acts as the bridge between:
+The ALU is responsible for executing the vector arithmetic and logical operations defined in the instruction set. The operation performed by the ALU is determined by the **opcode** field of the instruction.
 
-- the **register-level view** of the data  
-and  
-- the **slice-level view** of the data
+Because all slices execute the same instruction at the same time, the SIMD datapath behaves like **8 identical processing slices running in parallel**.
 
-Without this step, the slices would not be able to operate independently on the elements of the vector.
+---
+
+### Pipeline Structure
+
+The ALU execution follows a **4-stage pipeline**. This pipeline structure is commonly used in SIMD architectures because it cleanly separates instruction handling, operand movement, computation, and result writeback.
+
+In this design, every instruction follows the same **fixed latency of 4 cycles**. Using a uniform latency simplifies control logic and keeps the execution model predictable.
+
+The four stages are:
+
+1. **Fetch & Decode**
+2. **Operand Fetch + Sparsity Check**
+3. **Execute**
+4. **Reduction / Writeback**
+
+Each stage performs a specific part of the instruction execution process.
+
+---
+
+### Stage 1 — Fetch & Decode
+
+In the first stage, the instruction is fetched and decoded.
+
+The hardware reads the **16-bit instruction** and extracts the instruction fields:
+
+- `opcode`
+- `vdst`
+- `vsrc1`
+- `vsrc2`
+
+The opcode determines which vector operation will be executed by the ALU in the later stages. The register indices are used to select the appropriate registers from the vector register file.
+
+After decoding, the instruction information is forwarded to the next stage of the pipeline.
+
+---
+
+### Stage 2 — Operand Fetch + Sparsity Check
+
+In the second stage, the SIMD unit reads the required operands from the **vector register file**.
+
+Using the register indices decoded in the previous stage, the hardware performs the required register reads. Because the register file has **three read ports**, it can fetch:
+
+- `vsrc1`
+- `vsrc2`
+- the current value of `vdst` (when required, such as for VMAC)
+
+Each register read returns a **64-bit vector value**.
+
+The datapath then unpacks these values into **8 individual INT8 elements**, which are routed to the corresponding SIMD slices.
+
+At this point, the architecture also performs a **sparsity check**.
+
+For operations such as multiplication, if one of the operands is **zero**, the computation for that slice can be skipped because the result will not contribute useful work.
+
+To support this optimization, the hardware checks each slice's operands and generates a **slice activity mask**:
+slice_active[7:0]
+
+Each bit of this mask indicates whether a slice should execute the operation or remain inactive.
+
+Inactive slices are gated before entering the execution stage so that they do not perform unnecessary work.
+
+---
+
+### Stage 3 — Execute
+
+In the third stage, the actual computation takes place inside the ALUs.
+
+Each slice receives:
+
+- its **8-bit operands**
+- the **opcode**
+- the **slice_active** control bit
+
+If the slice is active, the ALU executes the operation specified by the opcode using a simple **case statement** structure. This selects the correct arithmetic or logical operation such as:
+
+- addition
+- multiplication
+- multiply-accumulate
+- ReLU activation
+
+If the slice is inactive according to the slice mask, the ALU simply performs no operation during that cycle.
+
+Because all slices run in parallel, the SIMD unit computes results for up to **8 elements simultaneously** during this stage.
+
+---
+
+### Stage 4 — Reduction and Writeback
+
+The final stage handles result completion and writing results back to the register file.
+
+For most vector instructions such as **VADD, VMUL, VMAC, and VRELU**, the output of each slice is written directly back into the destination vector register.
+
+Since each slice produces one element, the **8 slice outputs are packed back together into a 64-bit vector value**, which is then written through the register file's single write port into `vdst`.
+
+The **VDOT instruction** is slightly different.
+
+Instead of producing a vector result, VDOT produces a **single scalar value**. After each slice computes its multiplication result, those values are passed through a **reduction tree** that sums all slice outputs together.
+
+The reduction tree combines the partial products to generate the final dot-product result before it is written back.
