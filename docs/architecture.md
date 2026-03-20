@@ -93,9 +93,7 @@ Each slice multiplies its elements from `vsrc1` and `vsrc2`, then adds the resul
 vdst[i] = vdst[i] + (vsrc1[i] * vsrc2[i])
 
 
-This instruction is typically used inside loops to build up dot products or accumulation-based computations across multiple vectors.
-
-Sparsity behavior applies to VMAC.
+This instruction is typically used inside loops to build up dot products or accumulation-based computations across multiple vectors. Sparsity behavior applies to VMAC.
 ---
 
 ### 4. VDOT
@@ -139,6 +137,8 @@ Each slice receives one value.
 
 This allows the entire vector register to be filled in a single instruction.
 
+By the way, vsrc2 is not used in VLOAD instructions hence it will by default be set to 0.
+
 ---
 
 ### 7. VSTORE
@@ -148,6 +148,7 @@ This allows the entire vector register to be filled in a single instruction.
 The instruction stores the **8 elements of a vector register** into **8 consecutive memory locations**.
 
 This is essentially the inverse operation of VLOAD.
+Similarly, vdst is not used in VLOAD instructions hence it will by default be set to 0.
 
 ---
 
@@ -423,3 +424,145 @@ that is coming to 129032.
 A value of **129032** also cannot be represented using INT8.
 
 Because of this, the architecture uses a **32-bit accumulator for the reduction result**, which safely holds the final scalar output produced by the dot product operation.
+
+## Memory System
+
+To support the **VLOAD** and **VSTORE** instructions, this architecture includes a simple on-chip memory block that behaves like a small **SRAM**.
+
+For this project, the SRAM is implemented in a simplified RTL way. In other words, it is not being modeled at the transistor level. Instead, it is just implemented as **an array of registers**. The reason for this is simple: the main goal of this project is to focus on the RTL and microarchitecture side of the SIMD design, not full custom memory cell design. So for this architecture, treating SRAM as a register array is enough to capture the behavior we need.
+
+---
+
+### Total Memory Size
+
+The total memory size is **256 bytes**.
+
+This is enough for the scope of the project while still keeping the design manageable. Since this SIMD unit is a small custom architecture and not a full processor system, the goal here is not to build a huge memory subsystem. The goal is just to have enough memory space to support vector loads and stores cleanly.
+
+---
+
+### SRAM Data Width per Location
+
+Each SRAM location stores **64 bits** of data.
+
+This is pretty self-explanatory if you have been following the architecture so far. Every vector register in the SIMD unit is already **64 bits wide**, and each vector contains **8 INT8 elements**. So if one vector register is 64 bits wide, then it makes the most sense for one memory location to also be **64 bits wide**.
+
+That way:
+
+- one **VLOAD** can bring in one full vector register
+- one **VSTORE** can write back one full vector register
+
+So the data width per SRAM location is:
+
+    64 bits = 8 bytes
+
+This keeps the memory system naturally matched to the register file and datapath width.
+
+---
+
+### Number of SRAM Locations
+
+Since the total memory size is **256 bytes**, and each SRAM location stores **8 bytes**, the number of total locations is:
+
+    256 / 8 = 32
+
+So the SRAM contains **32 locations** total.
+
+Again, this follows directly from the design choices already made earlier. Once the vector register width was fixed at 64 bits, it made sense for the memory width to also be 64 bits, and once that is true, the number of locations comes directly from the total memory size.
+
+---
+
+### Address Width
+
+To address **32 locations**, the number of address bits actually needed is:
+
+    log2(32) = 5
+
+So in strict terms, only **5 address bits** are necessary to uniquely select every SRAM location.
+
+However, in this architecture, the SRAM address width is being kept as **8 bits**.
+
+That means:
+
+- **5 bits** are actually used for selecting one of the 32 memory locations
+- the remaining **3 bits are reserved**
+
+So effectively, the address format is wider than what is strictly required right now.
+
+The reason for doing this is that it keeps the address format cleaner and more standard-looking, while also leaving some room for future extension if needed. So even though only 5 bits are functionally needed, the design rounds the address width up to 8 bits and treats the extra 3 bits as reserved for now.
+
+---
+
+### Memory Alignment
+
+The memory system uses **8-byte aligned addresses only**.
+
+This also follows pretty naturally from the rest of the architecture. Since each SRAM location is **64 bits wide**, which is **8 bytes**, every valid access should point to one full 64-bit chunk in memory.
+
+So the alignment rule is:
+
+- all valid memory accesses must begin at an address that is a multiple of **8 bytes**
+
+This keeps loads and stores clean, because each memory access maps exactly to one full vector register. In other words, there is no need to split a vector across multiple memory locations or do partial unaligned accesses.
+
+---
+
+### Why This Memory Design Makes Sense
+
+The SRAM design choices all come directly from the earlier microarchitecture decisions.
+
+- The vector register width is **64 bits**
+- each vector holds **8 INT8 elements**
+- so memory locations are also made **64 bits wide**
+- total memory is kept at **256 bytes** for a manageable project scope
+- that gives **32 total locations**
+- addressing those 32 locations only needs **5 bits**
+- but the address is rounded up to **8 bits**, leaving **3 reserved bits**
+
+So overall, the memory system is intentionally designed to match the vector architecture cleanly instead of being made as a separate unrelated block.
+
+---
+
+### Role of SRAM in the SIMD Architecture
+
+The SRAM is mainly used by the **VLOAD** and **VSTORE** instructions.
+
+- **VLOAD** reads one 64-bit memory location and loads that full value into a vector register
+- **VSTORE** writes one 64-bit vector register value back into one SRAM location
+
+Because one memory location matches one vector register exactly, these operations stay simple and direct inside the datapath.
+
+## Control Signals
+
+The SIMD architecture also includes a set of **control signals** that work together with the datapath.
+
+In general, a control signal is a signal generated by the control side of the design that tells the datapath **what to do at a given time**. The datapath contains the hardware that actually moves data, performs arithmetic, reads registers, writes results, and handles execution. The control signals are what guide that hardware and make sure the correct operation happens in the correct cycle.
+
+So in a simple way:
+
+- the **datapath** is the part that does the work
+- the **control signals** are the part that tell the datapath how to do that work
+
+This relationship is important because the datapath by itself is not enough. Even if the hardware for register reads, ALU operations, reduction, and writeback all exists, the design still needs control logic to decide:
+
+- which registers should be read
+- which operation the ALU should execute
+- when a writeback should happen
+- when a slice should be active or inactive
+- when reduction logic should be used
+- when memory should be read or written
+
+So the control signals act like the coordination layer between the instruction being decoded and the datapath actually carrying out that instruction.
+
+In this architecture, the control signals come from the decoded instruction and then move through the pipeline along with the data. Their job is to make sure that each stage of the datapath performs the correct action for the instruction currently in execution.
+
+For example, depending on the instruction, the control logic may need to signal that:
+
+- a register file read should happen
+- the ALU should perform add, multiply, or ReLU
+- sparsity gating should be enabled
+- the reduction tree should be used
+- the register file write port should be enabled
+- the memory block should perform a load or store
+
+At this stage of the design, the exact list of control signals is still to be finalized. However, the general purpose of the control logic is already clear: it exists to drive the datapath correctly and make sure each instruction follows the intended execution path through the SIMD pipeline.
