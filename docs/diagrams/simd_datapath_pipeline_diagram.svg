@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1650" height="900" viewBox="0 0 1650 900">
+  <defs>
+    <style>
+      .title { font: 700 30px Arial, sans-serif; fill: #111; }
+      .subtitle { font: 500 16px Arial, sans-serif; fill: #444; }
+      .stage { fill: #ffffff; stroke: #1f2937; stroke-width: 2.5; rx: 20; ry: 20; }
+      .stage2 { fill: #f8fafc; stroke: #1f2937; stroke-width: 2.5; rx: 20; ry: 20; }
+      .slice { fill: #eef2ff; stroke: #1f2937; stroke-width: 2; rx: 10; ry: 10; }
+      .mini { fill: #ecfeff; stroke: #1f2937; stroke-width: 2; rx: 10; ry: 10; }
+      .label { font: 700 22px Arial, sans-serif; fill: #111; }
+      .body { font: 500 16px Arial, sans-serif; fill: #222; }
+      .small { font: 500 15px Arial, sans-serif; fill: #333; }
+      .bus { stroke: #111827; stroke-width: 3; fill: none; }
+      .ctrl { stroke: #7c3aed; stroke-width: 3; fill: none; stroke-dasharray: 10 8; }
+      .arrow { marker-end: url(#arrow); }
+      .arrow2 { marker-end: url(#arrow2); }
+      .regline { stroke: #6b7280; stroke-width: 2; stroke-dasharray: 6 6; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#111827"/>
+    </marker>
+    <marker id="arrow2" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <text x="50" y="55" class="title">SIMD Datapath — 4-Stage Pipeline</text>
+  <text x="50" y="85" class="subtitle">Uniform 4-cycle flow for vector instructions with special handling for VDOT and memory operations</text>
+
+  <!-- Stage boxes -->
+  <rect x="55" y="150" width="340" height="620" class="stage"/>
+  <rect x="440" y="150" width="360" height="620" class="stage2"/>
+  <rect x="845" y="150" width="345" height="620" class="stage"/>
+  <rect x="1235" y="150" width="355" height="620" class="stage2"/>
+
+  <!-- Stage headers -->
+  <text x="120" y="205" class="label">Stage 1: Fetch &amp; Decode</text>
+  <text x="488" y="205" class="label">Stage 2: Operand Fetch +</text>
+  <text x="545" y="235" class="label">Sparsity Check</text>
+  <text x="955" y="205" class="label">Stage 3: Execute</text>
+  <text x="1285" y="205" class="label">Stage 4: Reduction /</text>
+  <text x="1348" y="235" class="label">Writeback</text>
+
+  <!-- Stage 1 -->
+  <rect x="110" y="270" width="230" height="90" class="mini"/>
+  <text x="145" y="325" class="label">Instruction Fetch</text>
+  <text x="168" y="348" class="small">16-bit instruction input</text>
+
+  <rect x="110" y="395" width="230" height="125" class="mini"/>
+  <text x="185" y="440" class="label">Decoder</text>
+  <text x="135" y="470" class="body">extracts:</text>
+  <text x="135" y="498" class="body">opcode, vdst, vsrc1, vsrc2</text>
+
+  <rect x="110" y="560" width="230" height="125" class="mini"/>
+  <text x="140" y="608" class="label">Control Generation</text>
+  <text x="140" y="638" class="body">read enables, ALU op,</text>
+  <text x="140" y="666" class="body">mem op, wb select</text>
+
+  <!-- Stage 2 -->
+  <rect x="490" y="270" width="260" height="110" class="mini"/>
+  <text x="545" y="320" class="label">Register File Read</text>
+  <text x="520" y="348" class="body">3 read ports: vsrc1, vsrc2,</text>
+  <text x="560" y="374" class="body">and vdst(old) for VMAC</text>
+
+  <rect x="490" y="420" width="260" height="110" class="mini"/>
+  <text x="550" y="470" class="label">Operand Unpack</text>
+  <text x="510" y="498" class="body">64-bit vectors → 8 × INT8</text>
+  <text x="555" y="524" class="body">per-slice operands</text>
+
+  <rect x="490" y="570" width="260" height="115" class="mini"/>
+  <text x="530" y="620" class="label">Sparsity Check</text>
+  <text x="530" y="648" class="body">generates slice_active[7:0]</text>
+  <text x="555" y="674" class="body">zero-skipping support</text>
+
+  <!-- Stage 3 -->
+  <text x="915" y="290" class="body">Shared opcode broadcast to all slices</text>
+  <rect x="905" y="330" width="85" height="62" class="slice"/><text x="925" y="368" class="body">Slice 0</text>
+  <rect x="1000" y="330" width="85" height="62" class="slice"/><text x="1020" y="368" class="body">Slice 1</text>
+  <rect x="1095" y="330" width="85" height="62" class="slice"/><text x="1115" y="368" class="body">Slice 2</text>
+
+  <rect x="905" y="420" width="85" height="62" class="slice"/><text x="925" y="458" class="body">Slice 3</text>
+  <rect x="1000" y="420" width="85" height="62" class="slice"/><text x="1020" y="458" class="body">Slice 4</text>
+  <rect x="1095" y="420" width="85" height="62" class="slice"/><text x="1115" y="458" class="body">Slice 5</text>
+
+  <rect x="952" y="510" width="85" height="62" class="slice"/><text x="972" y="548" class="body">Slice 6</text>
+  <rect x="1047" y="510" width="85" height="62" class="slice"/><text x="1067" y="548" class="body">Slice 7</text>
+
+  <rect x="900" y="620" width="280" height="90" class="mini"/>
+  <text x="1000" y="660" class="label">Per-Slice ALU</text>
+  <text x="922" y="688" class="body">VADD / VMUL / VMAC / VRELU behavior</text>
+
+  <!-- Stage 4 -->
+  <rect x="1280" y="275" width="265" height="110" class="mini"/>
+  <text x="1355" y="322" class="label">Vector Pack</text>
+  <text x="1322" y="350" class="body">8 slice outputs → 64-bit vector</text>
+  <text x="1360" y="376" class="body">for normal writeback</text>
+
+  <rect x="1280" y="430" width="265" height="125" class="mini"/>
+  <text x="1345" y="478" class="label">Reduction Tree</text>
+  <text x="1324" y="506" class="body">VDOT path only</text>
+  <text x="1305" y="534" class="body">8 products → 32-bit scalar result</text>
+
+  <rect x="1280" y="600" width="265" height="110" class="mini"/>
+  <text x="1362" y="648" class="label">Writeback</text>
+  <text x="1310" y="676" class="body">register file write / SRAM store path</text>
+
+  <!-- pipeline boundaries -->
+  <line x1="417" y1="145" x2="417" y2="775" class="regline"/>
+  <line x1="822" y1="145" x2="822" y2="775" class="regline"/>
+  <line x1="1212" y1="145" x2="1212" y2="775" class="regline"/>
+
+  <text x="372" y="140" class="small">pipeline reg</text>
+  <text x="777" y="140" class="small">pipeline reg</text>
+  <text x="1167" y="140" class="small">pipeline reg</text>
+
+  <!-- Horizontal arrows between stages -->
+  <path d="M340 458 L490 458" class="bus arrow"/>
+  <path d="M750 475 L905 475" class="bus arrow"/>
+  <path d="M1180 475 L1280 475" class="bus arrow"/>
+
+  <!-- Internal arrows -->
+  <path d="M225 360 L225 395" class="bus arrow"/>
+  <path d="M225 520 L225 560" class="bus arrow"/>
+
+  <path d="M620 380 L620 420" class="bus arrow"/>
+  <path d="M620 530 L620 570" class="bus arrow"/>
+
+  <path d="M620 475 L905 360" class="bus arrow"/>
+  <path d="M620 475 L905 450" class="bus arrow"/>
+  <path d="M620 475 L952 540" class="bus arrow"/>
+
+  <path d="M1040 392 L1412 392 L1412 430" class="bus arrow"/>
+  <path d="M1040 572 L1412 572 L1412 600" class="bus arrow"/>
+  <path d="M1412 385 L1412 430" class="bus arrow"/>
+
+  <!-- Memory/load-store annotation -->
+  <rect x="610" y="735" width="570" height="95" class="stage2"/>
+  <text x="645" y="775" class="label">Memory instruction note</text>
+  <text x="645" y="804" class="body">VLOAD / VSTORE bypass slice ALUs for main arithmetic, but still use the same overall pipeline control flow.</text>
+
+  <!-- Control annotations -->
+  <path d="M270 622 L905 310" class="ctrl arrow2"/>
+  <path d="M270 622 L1280 322" class="ctrl arrow2"/>
+  <path d="M270 622 L1280 648" class="ctrl arrow2"/>
+  <text x="300" y="610" class="small">control signals move with pipeline stage</text>
+</svg>

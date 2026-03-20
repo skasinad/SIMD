@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980">
+  <defs>
+    <style>
+      .title { font: 700 30px Arial, sans-serif; fill: #111; }
+      .subtitle { font: 500 16px Arial, sans-serif; fill: #444; }
+      .label { font: 600 20px Arial, sans-serif; fill: #111; }
+      .small { font: 500 15px Arial, sans-serif; fill: #222; }
+      .box { fill: #ffffff; stroke: #1f2937; stroke-width: 2.5; rx: 18; ry: 18; }
+      .box2 { fill: #f8fafc; stroke: #1f2937; stroke-width: 2.5; rx: 18; ry: 18; }
+      .slice { fill: #eef2ff; stroke: #1f2937; stroke-width: 2; rx: 10; ry: 10; }
+      .pmu { fill: #ecfeff; stroke: #1f2937; stroke-width: 2.5; rx: 18; ry: 18; }
+      .bus { stroke: #111827; stroke-width: 3; fill: none; }
+      .ctrl { stroke: #7c3aed; stroke-width: 3; fill: none; stroke-dasharray: 10 8; }
+      .mon { stroke: #0891b2; stroke-width: 3; fill: none; stroke-dasharray: 7 7; }
+      .arrow { marker-end: url(#arrow); }
+      .arrow2 { marker-end: url(#arrow2); }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#111827"/>
+    </marker>
+    <marker id="arrow2" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <text x="60" y="55" class="title">SIMD Microarchitecture — Top-Level Block Diagram</text>
+  <text x="60" y="85" class="subtitle">8-lane INT8 SIMD engine with register file, SRAM path, reduction tree, and PMU observation points</text>
+
+  <!-- Instruction input / decoder -->
+  <rect x="70" y="150" width="260" height="110" class="box"/>
+  <text x="110" y="195" class="label">Instruction Input</text>
+  <text x="145" y="225" class="label">/ Decoder</text>
+  <text x="128" y="248" class="small">16-bit instruction decode</text>
+
+  <!-- Control logic -->
+  <rect x="420" y="135" width="270" height="140" class="box2"/>
+  <text x="495" y="195" class="label">Control Logic</text>
+  <text x="465" y="225" class="small">opcode decode, enables, stage control,</text>
+  <text x="480" y="247" class="small">slice mask, memory + writeback select</text>
+
+  <!-- Register file -->
+  <rect x="70" y="360" width="290" height="170" class="box"/>
+  <text x="137" y="425" class="label">Vector Register File</text>
+  <text x="120" y="455" class="small">16 registers × 64-bit</text>
+  <text x="95" y="480" class="small">3 read ports / 1 write port</text>
+
+  <!-- Operand fetch -->
+  <rect x="450" y="375" width="250" height="140" class="box"/>
+  <text x="505" y="430" class="label">Operand Fetch</text>
+  <text x="486" y="460" class="small">unpack 64-bit vectors</text>
+  <text x="475" y="482" class="small">into 8 × INT8 slice inputs</text>
+
+  <!-- 8 slices container -->
+  <rect x="790" y="305" width="540" height="300" class="box2"/>
+  <text x="1015" y="342" class="label">8 SIMD Slices</text>
+
+  <rect x="825" y="385" width="110" height="65" class="slice"/><text x="855" y="425" class="label">Slice 0</text>
+  <rect x="950" y="385" width="110" height="65" class="slice"/><text x="980" y="425" class="label">Slice 1</text>
+  <rect x="1075" y="385" width="110" height="65" class="slice"/><text x="1105" y="425" class="label">Slice 2</text>
+  <rect x="1200" y="385" width="110" height="65" class="slice"/><text x="1230" y="425" class="label">Slice 3</text>
+
+  <rect x="825" y="475" width="110" height="65" class="slice"/><text x="855" y="515" class="label">Slice 4</text>
+  <rect x="950" y="475" width="110" height="65" class="slice"/><text x="980" y="515" class="label">Slice 5</text>
+  <rect x="1075" y="475" width="110" height="65" class="slice"/><text x="1105" y="515" class="label">Slice 6</text>
+  <rect x="1200" y="475" width="110" height="65" class="slice"/><text x="1230" y="515" class="label">Slice 7</text>
+
+  <text x="885" y="570" class="small">parallel INT8 ALU execution</text>
+  <text x="1095" y="570" class="small">shared opcode / per-slice data</text>
+
+  <!-- Reduction tree -->
+  <rect x="1120" y="690" width="260" height="120" class="box"/>
+  <text x="1177" y="740" class="label">Reduction Tree</text>
+  <text x="1155" y="770" class="small">used by VDOT only</text>
+  <text x="1147" y="792" class="small">8 products → 32-bit scalar</text>
+
+  <!-- SRAM -->
+  <rect x="70" y="690" width="280" height="140" class="box"/>
+  <text x="175" y="745" class="label">SRAM</text>
+  <text x="112" y="775" class="small">256 bytes total = 32 × 64-bit locations</text>
+  <text x="145" y="800" class="small">used by VLOAD / VSTORE</text>
+
+  <!-- Writeback -->
+  <rect x="470" y="700" width="270" height="120" class="box"/>
+  <text x="525" y="748" class="label">Writeback Path</text>
+  <text x="492" y="778" class="small">pack vector result / select scalar</text>
+  <text x="535" y="800" class="small">register file write port</text>
+
+  <!-- PMU -->
+  <rect x="1370" y="150" width="170" height="610" class="pmu"/>
+  <text x="1415" y="210" class="label">PMU</text>
+  <text x="1395" y="245" class="small">Performance</text>
+  <text x="1397" y="268" class="small">Monitor Unit</text>
+  <text x="1392" y="320" class="small">tracks:</text>
+  <text x="1392" y="350" class="small">• instruction counts</text>
+  <text x="1392" y="380" class="small">• slice activity</text>
+  <text x="1392" y="410" class="small">• skipped sparse ops</text>
+  <text x="1392" y="440" class="small">• loads / stores</text>
+  <text x="1392" y="470" class="small">• reduction usage</text>
+  <text x="1392" y="500" class="small">• writeback events</text>
+
+  <!-- Main data arrows -->
+  <path d="M330 415 L450 415" class="bus arrow"/>
+  <path d="M700 445 L790 445" class="bus arrow"/>
+  <path d="M1060 605 L1060 690 L1120 690" class="bus arrow"/>
+  <path d="M900 605 L900 760 L740 760" class="bus arrow"/>
+  <path d="M1120 750 L740 750" class="bus arrow"/>
+  <path d="M470 760 L360 760 L360 515" class="bus arrow"/>
+  <path d="M350 760 L470 760" class="bus arrow"/>
+  <path d="M210 690 L210 530" class="bus arrow"/>
+
+  <!-- Decoder/control connections -->
+  <path d="M330 205 L420 205" class="bus arrow"/>
+  <path d="M555 275 L555 375" class="ctrl arrow2"/>
+  <path d="M690 220 L1020 220 L1020 305" class="ctrl arrow2"/>
+  <path d="M650 275 L650 700" class="ctrl arrow2"/>
+  <path d="M615 275 L615 690 L1120 690" class="ctrl arrow2"/>
+  <path d="M600 275 L210 690" class="ctrl arrow2"/>
+
+  <!-- PMU monitor taps -->
+  <path d="M330 205 L1370 205" class="mon arrow"/>
+  <path d="M690 205 L1370 235" class="mon arrow"/>
+  <path d="M700 445 L1370 365" class="mon arrow"/>
+  <path d="M1330 455 L1370 455" class="mon arrow"/>
+  <path d="M1380 750 L1380 750" class="mon"/>
+  <path d="M1380 750" class="mon"/>
+  <path d="M1380 750" class="mon"/>
+  <path d="M1380 750" class="mon"/>
+  <path d="M1380 750" class="mon"/>
+  <path d="M1380 750" class="mon"/>
+  <path d="M1380 750" class="mon"/>
+  <path d="M1380 750" class="mon"/>
+  <path d="M1330 750 L1370 500" class="mon arrow"/>
+  <path d="M740 760 L1370 530" class="mon arrow"/>
+  <path d="M350 760 L1370 560" class="mon arrow"/>
+  <path d="M1240 690 L1370 590" class="mon arrow"/>
+
+  <!-- Legend -->
+  <rect x="60" y="885" width="510" height="60" class="box2"/>
+  <line x1="90" y1="915" x2="150" y2="915" class="bus arrow"/><text x="165" y="921" class="small">main datapath / data movement</text>
+  <line x1="340" y1="915" x2="400" y2="915" class="ctrl arrow2"/><text x="415" y="921" class="small">control / enable flow</text>
+  <line x1="620" y1="915" x2="680" y2="915" class="mon arrow"/><text x="695" y="921" class="small">PMU observation taps</text>
+</svg>

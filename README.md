@@ -56,7 +56,7 @@ Examples include:
 - **VDOT** – vector dot product with reduction  
 - **VRELU** – ReLU activation (clamps negative values to zero)
 
-These operations operate across all SIMD lanes in parallel.
+These operations operate across all SIMD slices in parallel.
 
 ---
 
@@ -72,7 +72,7 @@ This allows the design to:
 - track skipped computations  
 - analyze lane utilization  
 
-Performance monitoring counters record how many lanes were active vs skipped during execution.
+Performance monitoring counters record how many slices were active vs skipped during execution.
 
 ---
 
@@ -111,10 +111,13 @@ SIMD/
 ├── rtl/
 │   ├── simd_top.sv
 │   ├── simd_decoder.sv
+│   ├── simd_control.sv
 │   ├── vector_regfile.sv
-│   ├── simd_lane.sv
+│   ├── simd_slice.sv
+│   ├── simd_alu.sv
 │   ├── reduction_unit.sv
 │   ├── sparsity_ctrl.sv
+│   ├── sram.sv
 │   └── simd_pmu.sv
 ├── tb/
 │   └── simd_tb.sv
@@ -128,7 +131,5 @@ SIMD/
 │   ├── architecture.md
 │   └── diagrams/
 └── README.md
-
-
 ---
 
