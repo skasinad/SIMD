@@ -381,3 +381,45 @@ The **VDOT instruction** is slightly different.
 Instead of producing a vector result, VDOT produces a **single scalar value**. After each slice computes its multiplication result, those values are passed through a **reduction tree** that sums all slice outputs together.
 
 The reduction tree combines the partial products to generate the final dot-product result before it is written back.
+
+### Reduction Tree
+
+To support the **VDOT instruction**, the datapath includes a structure called a **reduction tree**.
+
+The purpose of the reduction tree is to take the **8 multiplication results coming from the slices** and combine them into a **single scalar value**. This is necessary because VDOT produces one final scalar output instead of a vector.
+
+Instead of adding the slice results sequentially, the design uses a **parallel reduction tree**. This allows the datapath to sum multiple values at the same time, which is much more efficient.
+
+The reduction tree works by combining partial sums across multiple levels.
+
+Since there are **8 slice outputs**, the number of reduction levels required is determined by log2(8) = 3.
+
+
+So the reduction tree has **3 levels**:
+
+- **Level 1:** 8 inputs are reduced to 4 partial sums  
+- **Level 2:** 4 partial sums are reduced to 2 partial sums  
+- **Level 3:** 2 partial sums are reduced to the final result  
+
+This structure allows all slice results to be combined in a small number of stages instead of performing additions one after another.
+
+### Result Width
+
+The reduction tree produces a **32-bit output value**.
+
+This wider result is necessary because the intermediate values produced during the dot product can become much larger than what an INT8 value can hold.
+
+For example:
+
+- The maximum value of an INT8 number is **127**
+- The largest multiplication inside a slice would be 127 * 127 = 16129.
+
+
+This value already cannot fit inside an INT8.
+
+Now consider the full dot product across all 8 slices which would be 127 added 8 times to itself so 127 + 127 + 127 + 127 + 127 + 127 + 127 + 127...
+that is coming to 129032.
+
+A value of **129032** also cannot be represented using INT8.
+
+Because of this, the architecture uses a **32-bit accumulator for the reduction result**, which safely holds the final scalar output produced by the dot product operation.
