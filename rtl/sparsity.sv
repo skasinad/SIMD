@@ -46,4 +46,4 @@ module sparsity (
             end
         end
     end   
-endmodule;
+endmodule
