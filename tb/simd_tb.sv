@@ -41,6 +41,7 @@ initial begin
     @(posedge clk);
     @(posedge clk);
     rst = 0;
+    @(posedge clk); //hopefully it fixes it...
 
     //first is sram ofc to load test data
     dut.memory.srambuff[0] = 64'h0807060504030201; //jist 8 INT8s of [2, 3, 4, 5, 6, 7, 8]
@@ -55,6 +56,18 @@ initial begin
     @(posedge clk);
     @(posedge clk);
     @(posedge clk); 
+
+    //some debugging stuff bc im getting all 0s...
+    /*$display("DEBUGGING SRAM[0]: %h", dut.memory.srambuff[0]);
+    $display("DEBUGGING rd_memory: %h", dut.rd_memory);
+    $display("DEBUGGING wt_data: %h", dut.wt_data);
+    $display("DEBUGGING write_reg_en: %b", dut.write_reg_en);
+    $display("DEBUGGING writeback_sel: %b", dut.writeback_sel);
+    $display("DEBUGGING v1: %h", dut.simdreg.file[1]);
+    */
+
+    //not sure why its still 0, i think its maybe an issue with my SRAM bc im loading stuff before the rst, so maybe an extra clock signal???
+
     instruction = {VLOAD, 4'd2, 4'd1, 4'd0, 1'b0};
     @(posedge clk); 
     @(posedge clk);
