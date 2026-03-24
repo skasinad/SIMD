@@ -7,6 +7,10 @@ each slice needs to get one part of the 8-bit value coming from the register
 3 bits of opcode
 also 1 enable bit
 total 28 bits
+
+FIXED A BUG!!!: 
+when any of the slices is disabled the old value would stay in the output from whatever instruction ran before
+so what i did is force the output to zero itself when the slice is disabled
 */
 
 
@@ -48,6 +52,8 @@ module slice#(
                             value <= num1; 
                     default: value <= 0;
                 endcase 
+            end else begin
+                value <= 0; //forcing it to be 0 
             end 
           
         end

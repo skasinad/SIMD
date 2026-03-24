@@ -65,6 +65,7 @@ initial begin
     $display("DEBUGGING writeback_sel: %b", dut.writeback_sel);
     $display("DEBUGGING v1: %h", dut.simdreg.file[1]);
     */
+    
 
     //not sure why its still 0, i think its maybe an issue with my SRAM bc im loading stuff before the rst, so maybe an extra clock signal???
 
