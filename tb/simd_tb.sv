@@ -150,7 +150,7 @@ initial begin
 end 
 
 //binding my assertions
-bind simd assert assertions (
+bind simd asserts assertions (
     .clk(clk),
     .rst(rst),
     .opcode(opcode),

@@ -10,7 +10,6 @@ Couple of rules i want to implement:
 - VLOAD will always use SRAM
 - SRAM write enabled only during VSTORE
 - Sparsity will be active only for the ones with multiplication
-
 */
 
 
@@ -39,11 +38,13 @@ module asserts (
     assert property(@(posedge clk) disable iff (rst) opcode != VDOT |-> scalar == 32'b0) else $error("assertion failed... scalar output despite non VDOT instruction");
 
     assert property(@(posedge clk) disable iff (rst) opcode == VDOT |-> writeback_sel == 2'b10) else $error("assertion failed, VDOT not using the reduction path");
-
     assert property(@(posedge clk) disable iff (rst) opcode == VLOAD |-> writeback_sel == 2'b00) else $error("failed VLOAD not using SRAM path");
 
     assert property(@(posedge clk) disable iff (rst) sram_func_en |-> opcode == VSTORE) else $error("assertion failed SRAM has become enabled during instruction not VSTORE");
 
+
     assert property(@(posedge clk) disable iff (rst) sparsity_en |->(opcode == VMUL || opcode== VMAC || opcode == VDOT)) else $error("assertion has failed, sparsity enabled for wrong instrcutions");
+
+    //more assertions to come... this is just the first 6 i could think of
 
 endmodule 
