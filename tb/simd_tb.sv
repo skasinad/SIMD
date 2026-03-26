@@ -149,5 +149,16 @@ initial begin
 
 end 
 
+//binding my assertions
+bind simd assert assertions (
+    .clk(clk),
+    .rst(rst),
+    .opcode(opcode),
+    .valid(valid),
+    .scalar(scalar),
+    .writeback_sel(writeback_sel),
+    .sram_func_en(sram_func_en),
+    .sparsity_en(sparsity_en)
+);
 
 endmodule 
