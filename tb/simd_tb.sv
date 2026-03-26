@@ -150,7 +150,7 @@ initial begin
 end 
 
 //binding my assertions
-bind simd asserts assertions (
+/*bind simd asserts assertions (
     .clk(clk),
     .rst(rst),
     .opcode(opcode),
@@ -160,5 +160,8 @@ bind simd asserts assertions (
     .sram_func_en(sram_func_en),
     .sparsity_en(sparsity_en)
 );
+
+*/ 
+//commented out bind block for now as icarus is giving me issues with it, but on EDA playground its useful
 
 endmodule 
