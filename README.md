@@ -1,191 +1,156 @@
-# SIMD Vector Processing Unit
+```markdown
+# SIMD Vector Processing Unit v1.0
 
-## What This Is
-A custom pipelined SIMD (Single Instruction Multiple Data) vector processing unit written from scratch in SystemVerilog. This is a portfolio project to show microarchitecture design skills. It is NOT a general purpose CPU — it is a specialized vector compute engine, similar in concept to things like ARM NEON or RISC-V vector extensions.
+A custom pipelined SIMD (Single Instruction Multiple Data) vector processing unit built from scratch in SystemVerilog. This is a portfolio project designed to show microarchitecture design and hardware verification skills.
 
-The whole point of this design is to process 8 elements in parallel using INT8 (signed 8-bit integers), which is a data type heavily used in ML inference hardware.
+This is **not** a general purpose CPU — its a specialized vector compute engine, similar in concept to ARM NEON or RISC-V vector extensions. The design processes 8 elements in parallel using INT8 (signed 8-bit integers), a data type widely used in ML inference hardware.
+
+This is explicitly the **first version** of this project. There are plans to expand the ISA, add more verification, and build out the tooling around it. See the [Next Steps](#next-steps) section for whats coming.
 
 ---
 
 ## Architecture Overview
 
-### Data Path
 - **Data type:** INT8 (signed 8-bit)
-- **Vector width:** 64 bits per register (holds 8 INT8 elements)
-- **Slices:** 8 parallel compute slices — each one handles one element independently
-- I call them "slices" instead of "lanes," personal naming choice
+- **Vector width:** 64 bits per register, 8 elements processed in parallel
+- **Register file:** 16 vector registers, 3 read ports, 1 write port
+- **Memory:** 256 byte SRAM, 32 locations, 64 bits each
+- **Pipeline:** 4 stages — Decode, Operand Fetch + Sparsity, Execute, Reduction + Writeback
+- **Sparsity aware execution** for multiply operations — skips slices with zero operands
+- **Reduction tree** for VDOT — 3-level parallel adder tree
 
-### Register File
-- 16 vector registers (v0 to v15)
-- Each register is 64 bits wide
-- 3 read ports and 1 write port
-- 3 read ports are needed because VMAC has to read src1, src2, AND the destination register all at the same time
-- Synchronous reads
-
-### Memory (SRAM)
-- 256 bytes total
-- 32 locations, each 64 bits wide (matches vector register width)
-- 5-bit address space
-- Reads happen every cycle, writes are gated by enable
-- Implemented as a register array in RTL
-
-### Pipeline
-4 stages, uniform latency:
-
-| Stage | What It Does |
-|-------|-------------|
-| Stage 1 | Decode — break the 16-bit instruction into fields and generate control signals |
-| Stage 2 | Operand Fetch and Sparsity Check |
-| Stage 3 | Execute — all 8 slices compute in parallel |
-| Stage 4 | Reduction (VDOT only) and Writeback |
+For the full architecture breakdown including control signals, ISA encoding, writeback paths, and design decisions, see [docs/architecture.md](docs/architecture.md).
 
 ---
 
-## Instruction Set (7 Instructions)
+## Instruction Set
 
-| Opcode | Instruction | What It Does |
-|--------|------------|--------------|
+7 instructions, 16-bit fixed width encoding:
+
+| Opcode | Instruction | Description |
+|--------|------------|-------------|
 | 000 | VADD | Element-wise addition |
 | 001 | VMUL | Element-wise multiplication (sparsity aware) |
 | 010 | VMAC | Multiply-accumulate (sparsity aware) |
 | 011 | VDOT | Dot product with reduction tree (sparsity aware) |
-| 100 | VRELU | ReLU activation — clamps negatives to zero |
+| 100 | VRELU | ReLU activation, clamps negatives to zero |
 | 101 | VLOAD | Load 8 INT8 values from SRAM into a vector register |
 | 110 | VSTORE | Write a vector register to SRAM |
 | 111 | RESERVED | — |
 
-### ISA Encoding (16-bit fixed width)
-
-[opcode(3) | vdst(4) | vsrc1(4) | vsrc2(4) | MBZ(1)]
-
-### Special Cases
-- **VLOAD:** vsrc2 unused (set to 0), vsrc1 holds memory address
-- **VSTORE:** vdst unused (set to 0), vsrc1 holds memory address, vsrc2 holds data register
-- **VRELU:** vsrc2 unused
-
----
-
-## Control Signals
-
-9 control signals generated combinationally from the opcode:
-
-| Instruction | wr | sram | sram_f | red | spar | wb_sel | alu | v2 | r3 |
-|-------------|-----|------|--------|-----|------|--------|-----|-----|-----|
-| VADD | 1 | 0 | 0 | 0 | 0 | 01 | 1 | 1 | 0 |
-| VMUL | 1 | 0 | 0 | 0 | 1 | 01 | 1 | 1 | 0 |
-| VMAC | 1 | 0 | 0 | 0 | 1 | 01 | 1 | 1 | 1 |
-| VDOT | 1 | 0 | 0 | 1 | 1 | 10 | 1 | 1 | 0 |
-| VRELU | 1 | 0 | 0 | 0 | 0 | 01 | 1 | 0 | 0 |
-| VLOAD | 1 | 1 | 0 | 0 | 0 | 00 | 0 | 0 | 0 |
-| VSTORE | 0 | 1 | 1 | 0 | 0 | 00 | 0 | 1 | 0 |
-| default | 0 | 0 | 0 | 0 | 0 | 00 | 0 | 0 | 0 |
-
----
-
-## Sparsity Aware Execution
-- Applies to VMUL, VMAC, and VDOT only
-- If either operand in a slice is zero, that slice gets skipped
-- Generates an 8-bit bitmask (1 = active, 0 = skip)
-- The bitmask is ANDed with the ALU enable to gate each slice individually
-
----
-
-## Reduction Tree (VDOT Only)
-- Takes 8 slice multiplication results (each 16-bit)
-- Sums them down in 3 levels of parallel additions
-  - Level 1: 8 to 4 partial sums (17 bits)
-  - Level 2: 4 to 2 partial sums (18 bits)
-  - Level 3: 2 to 1 final result (19 bits, zero extended to 32 bits)
-- Purely combinational (no clock)
-- Verified: 8 x 16129 = 129032
-
----
-
-## Writeback Path
-Three possible sources write back to the register file through a mux:
-
-| writeback_sel | Source | Used By |
-|---------------|--------|---------|
-| 00 | SRAM output | VLOAD |
-| 01 | ALU (packed 8 slices) | VADD, VMUL, VMAC, VRELU |
-| 10 | Reduction tree | VDOT |
-
----
-
-## Top Level Interface
-
-module simd (
-    input  logic        clk,
-    input  logic        rst,
-    input  logic [15:0] instruction,
-    output logic [63:0] result,
-    output logic [31:0] scalar,
-    output logic        valid
-);
-
-- Instructions are driven externally (no instruction memory or program counter inside)
-- result is the 64-bit vector writeback
-- scalar is the 32-bit VDOT dot product output
-- valid is high when the output is meaningful (driven by write_reg_en)
+Encoding format: `[opcode(3) | vdst(4) | vsrc1(4) | vsrc2(4) | MBZ(1)]`
 
 ---
 
 ## File Structure
 
+```
 SIMD/
 ├── rtl/
-│   ├── simd.sv        — DONE
-│   ├── control.sv         — DONE
-│   ├── registers.sv       — DONE
-│   ├── slice.sv           — DONE
-│   ├── reductiontree.sv   — DONE
-│   ├── sparsity.sv        — DONE
-│   ├── sram.sv            — DONE
-│   └── pmu.sv        — not started
+│   ├── simd.sv            ← top level module, wires everything together
+│   ├── control.sv         ← combinational control signal generator
+│   ├── registers.sv       ← 16-entry vector register file
+│   ├── slice.sv           ← single compute slice (8 instantiated in top)
+│   ├── reductiontree.sv   ← 3-level parallel adder tree for VDOT
+│   ├── sparsity.sv        ← zero operand detection, generates skip mask
+│   └── sram.sv            ← 32-location, 64-bit wide memory
 ├── tb/
-│   └── simd_tb.sv         — in progress
+│   └── simd_tb.sv         ← testbench, verifies all 7 instructions
 ├── assertions/
-│   └── properties.sv — not started
+│   └── asserts.sv         ← 6 concurrent SVA properties
 ├── python/
-│   ├── golden.py    — not started
-│   ├── vectorgen.py— not started
-│   └── analysis.py        — not started
+│   └── baseline.py        ← golden model reference for verification
 ├── docs/
-│   ├── architecture.md
+│   ├── architecture.md    ← full architecture documentation
 │   └── diagrams/
+│       └── simd_top_level_block_diagram
 └── README.md
+```
 
 ---
 
-## Completed RTL Modules
+## Verification
 
-### control.sv
-Purely combinational control signal generator. Takes a 3-bit opcode and outputs all 9 control signals through an always_comb case statement.
+### Testbench
+All 7 instructions tested and passing in simulation using Icarus Verilog. Testbench preloads SRAM with known data, runs each instruction, and displays results.
 
-### registers.sv
-16-entry vector register file. 64 bits per register. 3 synchronous read ports, 1 write port. Write gated by enable. All registers reset to zero.
+```
+VADD  result: 110f0d0b09070503    ✓
+VMUL  result: 48382a1e140c0602    ✓
+VMAC  result: 48382a1e140c0602    ✓
+VDOT  scalar: 240                 ✓
+VRELU result: 0800060004000200    ✓
+Sparsity test: 4000240010000400   ✓
+VSTORE mem[4]: 110f0d0b09070503   ✓
+```
 
-### sram.sv
-32-location memory, 64 bits per location. Write gated by enable, reads happen every cycle. Resets to all zeros.
+### Assertions
+6 concurrent SVA properties in `assertions/asserts.sv` covering:
+- Reset clears valid
+- Scalar output is zero unless VDOT
+- VDOT always uses reduction path
+- VLOAD always uses SRAM path
+- SRAM write only enabled during VSTORE
+- Sparsity only active for multiply operations
 
-### slice.sv
-Single compute slice. Handles VADD, VMUL, VMAC, VDOT, and VRELU for one 8-bit element. Output is 16 bits to preserve precision for VDOT. Sequential (clocked).
+Syntax verified with Verilator `--lint-only` (zero errors). Runtime validation to be completed on EDA Playground.
 
-### sparsity.sv
-Checks each operand pair for zeros across all 8 slices. Outputs an 8-bit bitmask. Active for VMUL, VMAC, and VDOT only. Defaults to all ones (all active) for other instructions.
+### Python Golden Model
+A baseline Python reference model in `python/baseline.py` that independently computes expected results for VADD, VMUL, VMAC, VDOT, and VRELU. All outputs match the RTL simulation results.
 
-### reductiontree.sv
-3-level adder tree for VDOT. Takes 8 x 16-bit inputs, produces one 32-bit output. Purely combinational.
-
-### simd.sv
-Top level module that wires everything together. Handles instruction decode inline, instantiates all submodules, unpacks operands into per-slice bytes, implements the writeback mux, and assigns outputs.
+This golden model is still very small right now — it covers the core operations with basic test vectors. Future iterations will expand it with randomized inputs, edge case coverage, and automated comparison against RTL output.
 
 ---
 
-## What Is Left
-- Testbench (simd_tb.sv) — in progress
-- Python golden model for verification
-- SVA assertions
-- Performance monitor unit
-- Test vector generation and analysis scripts
+## How to Run
+
+### Compile and Simulate
+
+```bash
+iverilog -g2012 -o simd_sim rtl/control.sv rtl/registers.sv rtl/sram.sv rtl/slice.sv rtl/sparsity.sv rtl/reductiontree.sv rtl/simd.sv tb/simd_tb.sv
+vvp simd_sim
+```
+
+### Run Golden Model
+
+```bash
+python3 python/baseline.py
+```
+
+### Lint Assertions
+
+```bash
+verilator --lint-only -Wall assertions/asserts.sv
+```
+
+---
+
+## Next Steps
+
+This is v1.0. Heres whats planned for future iterations:
+
+- **Expand the ISA** — add instructions like VSUB (subtraction), VMAX/VMIN (element-wise max/min), VSHIFT (bit shifting), and VABS (absolute value)
+- **More SVA assertions** — add coverage for writeback path correctness, register write disable during VSTORE, sparsity mask validation against operand data
+- **Performance Monitor Unit (PMU)** — track cycle counts, instruction counts, sparsity skip rates, and ALU utilization
+- **Expand the golden model** — randomized test vectors, automated RTL vs Python comparison, overflow and edge case testing
+- **Hazard detection** — add data hazard detection and forwarding for back-to-back dependent instructions
+- **Pipeline registers** — add explicit pipeline stage registers with proper valid/stall handshaking
+- **Test vector generator** — Python script to generate random instruction sequences and expected results
+- **Waveform analysis** — GTKWave integration for visual pipeline debugging
+
+---
+
+## Tools Used
+
+- **SystemVerilog** — RTL design and testbench
+- **Icarus Verilog** — simulation
+- **Verilator** — assertion linting
+- **Python 3** — golden model
+- **GTKWave** — waveform viewing (optional)
+
+---
+
+## License
+
+This is a personal portfolio project. Feel free to look around and learn from it.
 ```
