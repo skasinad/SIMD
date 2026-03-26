@@ -1,4 +1,3 @@
-```markdown
 # SIMD Vector Processing Unit v1.0
 
 A custom pipelined SIMD (Single Instruction Multiple Data) vector processing unit built from scratch in SystemVerilog. This is a portfolio project designed to show microarchitecture design and hardware verification skills.
